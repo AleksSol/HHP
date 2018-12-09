@@ -6,7 +6,7 @@ import os
 import pickle
 import networkx as nx
 import numpy as np
-
+import csv
 
 class NameExtract:
     VOLDEMORT = ["You-Know-Who", "He-Who-Must-Not-Be-Named", "The Dark Lord", "Dark Lord"]
@@ -187,10 +187,10 @@ class CollectionSummarizer:
                 crr_dist -= distances[i]
             for k in range(i, j):
                 if names[i] != names[j]:
-                    res_dict[(names[i], names[j])] += 1
+                    res_dict[(min(names[i], names[j]), max(names[i], names[j]))] += 1
         return res_dict
 
-    def build_graph(self, max_distance=25, save_file='graph.nx'):
+    def to_networkx(self, max_distance=25, save_file='graph.nx'):
         if not self._processed:
             raise RuntimeError('Process\load data first')
         new_graph = nx.Graph()
@@ -211,10 +211,41 @@ class CollectionSummarizer:
                 new_graph.edges[edge][f'{i}_weight'] = book_dist[i][edge]
         nx.write_gpickle(new_graph, save_file)
 
+    def to_gephi(self, max_distance=25, out_dir='./gephi'):
+        if not os.path.isdir(out_dir):
+            os.mkdir(out_dir)
+        book_dist = []
+        book_nodes = []
+        all_dist = defaultdict(int)
+        for i, book in enumerate(self._data):
+            names, distances, set_names = book
+            edges = self.generate_edges(names, distances, max_distance=max_distance)
+            book_dist.append(edges)
+            book_nodes.append(set_names)
+            for key in edges:
+                all_dist[key] += edges[key]
+        key_to_id = dict()
+        with open(os.path.join(out_dir, 'node.csv'), 'w', newline='') as nodes_file:
+            nodes_writer = csv.writer(nodes_file)
+            csv_row = ['Id', 'Label', 'All_uses'] + [f'Uses_{i}' for i in range(1, 8)]
+            nodes_writer.writerow(csv_row)
+            for i, (key, value) in enumerate(self._summarized_data.items()):
+                key_to_id[key] = i
+                csv_row = [i, key, value] + [book[key] for book in book_nodes]
+                nodes_writer.writerow(csv_row)
+
+        with open(os.path.join(out_dir, 'edges.csv'), 'w', newline='') as edges_file:
+            nodes_writer = csv.writer(edges_file)
+            csv_row = ['Source', 'Target', 'Weight'] + [f'edges_{i}' for i in range(1, 8)]
+            nodes_writer.writerow(csv_row)
+            for key, value in all_dist.items():
+                csv_row = [key_to_id[key[0]], key_to_id[key[1]], value] + [book[key] for book in book_dist]
+                nodes_writer.writerow(csv_row)
+
 
 if __name__ == '__main__':
     model = CollectionSummarizer('./data/books', mapping='mapping.txt')
-    # model.process_docs()
-    model.load_data('./output_data')
+    model.process_docs()
+    model.save_data('./output_data')
     for dist in range(5, 31, 5):
-        model.build_graph(max_distance=dist, save_file=f'out_graph/graph_{dist}.nx')
+        model.to_gephi(max_distance=dist, out_dir=f'out_gephi/{dist}')
