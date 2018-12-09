@@ -5,8 +5,8 @@ from tqdm import tqdm
 import os
 import pickle
 import networkx as nx
-import numpy as np
 import csv
+
 
 class NameExtract:
     VOLDEMORT = ["You-Know-Who", "He-Who-Must-Not-Be-Named", "The Dark Lord", "Dark Lord"]
@@ -102,6 +102,8 @@ class CollectionSummarizer:
                         if new != 'none':
                             new = new.split(',')
                             self.mapping[old] = new
+                        else:
+                            self.mapping[old] = []
 
     def _apply_mapping(self):
         for key in self.mapping:
@@ -211,6 +213,11 @@ class CollectionSummarizer:
                 new_graph.edges[edge][f'{i}_weight'] = book_dist[i][edge]
         nx.write_gpickle(new_graph, save_file)
 
+    @staticmethod
+    def _up_name(name):
+        name = [nm[0].upper() + nm[1:] for nm in name.split('_')]
+        return ' '.join(name)
+
     def to_gephi(self, max_distance=25, out_dir='./gephi'):
         if not os.path.isdir(out_dir):
             os.mkdir(out_dir)
@@ -231,7 +238,7 @@ class CollectionSummarizer:
             nodes_writer.writerow(csv_row)
             for i, (key, value) in enumerate(self._summarized_data.items()):
                 key_to_id[key] = i
-                csv_row = [i, key, value] + [book[key] for book in book_nodes]
+                csv_row = [i, self._up_name(key), value] + [book[key] for book in book_nodes]
                 nodes_writer.writerow(csv_row)
 
         with open(os.path.join(out_dir, 'edges.csv'), 'w', newline='') as edges_file:
